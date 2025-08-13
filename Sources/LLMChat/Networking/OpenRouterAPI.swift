@@ -178,6 +178,7 @@ class OpenRouterAPI: ObservableObject {
     private let baseURL = "https://openrouter.ai/api/v1"
     private let session: URLSession
     private var streamingTasks: [UUID: URLSessionDataTask] = [:]
+    private var streamBuffers: [UUID: String] = [:]
     
     @Published var isLoading = false
     @Published var error: OpenRouterError?
@@ -217,7 +218,20 @@ class OpenRouterAPI: ObservableObject {
             }
             
             guard httpResponse.statusCode == 200 else {
-                throw OpenRouterError.httpError(httpResponse.statusCode)
+                let errorMessage = try? extractErrorMessage(from: data)
+                
+                // Handle specific status codes
+                switch httpResponse.statusCode {
+                case 429:
+                    let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init)
+                    throw OpenRouterError.rateLimited(retryAfter: retryAfter)
+                case 402:
+                    throw OpenRouterError.insufficientCredits
+                case 404:
+                    throw OpenRouterError.modelNotFound
+                default:
+                    throw OpenRouterError.httpError(httpResponse.statusCode, errorMessage)
+                }
             }
             
             let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
@@ -254,7 +268,22 @@ class OpenRouterAPI: ObservableObject {
             }
             
             guard httpResponse.statusCode == 200 else {
-                throw OpenRouterError.httpError(httpResponse.statusCode)
+                let errorMessage = try? extractErrorMessage(from: data)
+                
+                // Handle specific status codes
+                switch httpResponse.statusCode {
+                case 429:
+                    let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init)
+                    throw OpenRouterError.rateLimited(retryAfter: retryAfter)
+                case 402:
+                    throw OpenRouterError.insufficientCredits
+                case 404:
+                    throw OpenRouterError.modelNotFound
+                case 413:
+                    throw OpenRouterError.contextLengthExceeded
+                default:
+                    throw OpenRouterError.httpError(httpResponse.statusCode, errorMessage)
+                }
             }
             
             let decoder = JSONDecoder()
@@ -306,52 +335,86 @@ class OpenRouterAPI: ObservableObject {
             return
         }
         
+        // Initialize buffer for this stream
+        streamBuffers[messageId] = ""
+        
         let task = session.dataTask(with: urlRequest) { [weak self] data, response, error in
-            if let error = error {
-                DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.streamBuffers.removeValue(forKey: messageId)
                     onError(OpenRouterError.networkError(error))
+                    return
                 }
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    self?.streamBuffers.removeValue(forKey: messageId)
                     onError(OpenRouterError.invalidResponse)
+                    return
                 }
-                return
-            }
-            
-            guard httpResponse.statusCode == 200 else {
-                DispatchQueue.main.async {
-                    onError(OpenRouterError.httpError(httpResponse.statusCode))
+                
+                guard httpResponse.statusCode == 200 else {
+                    self?.streamBuffers.removeValue(forKey: messageId)
+                    
+                    // Handle specific error codes for streaming
+                    let error: OpenRouterError
+                    switch httpResponse.statusCode {
+                    case 429:
+                        let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init)
+                        error = OpenRouterError.rateLimited(retryAfter: retryAfter)
+                    case 402:
+                        error = OpenRouterError.insufficientCredits
+                    case 404:
+                        error = OpenRouterError.modelNotFound
+                    case 413:
+                        error = OpenRouterError.contextLengthExceeded
+                    default:
+                        error = OpenRouterError.httpError(httpResponse.statusCode, nil)
+                    }
+                    
+                    onError(error)
+                    return
                 }
-                return
+                
+                guard let data = data else { return }
+                
+                self?.processStreamDataIncremental(
+                    data: data,
+                    messageId: messageId,
+                    onToken: onToken,
+                    onComplete: onComplete,
+                    onError: onError
+                )
             }
-            
-            guard let data = data else { return }
-            
-            self?.processStreamData(
-                data: data,
-                onToken: onToken,
-                onComplete: onComplete,
-                onError: onError
-            )
         }
         
         streamingTasks[messageId] = task
         task.resume()
     }
     
-    private func processStreamData(
+    private func processStreamDataIncremental(
         data: Data,
+        messageId: UUID,
         onToken: @escaping (String) -> Void,
         onComplete: @escaping (Usage?) -> Void,
         onError: @escaping (Error) -> Void
     ) {
-        let string = String(data: data, encoding: .utf8) ?? ""
-        let lines = string.components(separatedBy: .newlines)
+        guard let newString = String(data: data, encoding: .utf8) else { return }
         
-        for line in lines {
+        // Append new data to buffer for this message
+        streamBuffers[messageId, default: ""] += newString
+        
+        // Process complete lines from the buffer
+        var buffer = streamBuffers[messageId] ?? ""
+        let lines = buffer.components(separatedBy: .newlines)
+        
+        // Keep the last line in buffer if it doesn't end with newline (incomplete)
+        let incompleteLastLine = !buffer.hasSuffix("\n") && !buffer.hasSuffix("\r\n")
+        let linesToProcess = incompleteLastLine ? Array(lines.dropLast()) : lines
+        
+        // Update buffer with remaining incomplete line
+        streamBuffers[messageId] = incompleteLastLine ? lines.last ?? "" : ""
+        
+        for line in linesToProcess {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             
             // Skip empty lines and non-data lines
@@ -361,9 +424,8 @@ class OpenRouterAPI: ObservableObject {
             
             // Check for completion
             if jsonString == "[DONE]" {
-                DispatchQueue.main.async {
-                    onComplete(nil)
-                }
+                streamBuffers.removeValue(forKey: messageId)
+                onComplete(nil)
                 return
             }
             
@@ -375,19 +437,18 @@ class OpenRouterAPI: ObservableObject {
                 
                 if let choice = streamResponse.choices.first {
                     if let content = choice.delta.content.first?.text {
-                        DispatchQueue.main.async {
-                            onToken(content)
-                        }
+                        onToken(content)
                     }
                     
                     if choice.finishReason != nil {
-                        DispatchQueue.main.async {
-                            onComplete(streamResponse.usage)
-                        }
+                        streamBuffers.removeValue(forKey: messageId)
+                        onComplete(streamResponse.usage)
+                        return
                     }
                 }
             } catch {
                 // Continue processing other chunks even if one fails
+                print("Failed to decode streaming response: \(error)")
                 continue
             }
         }
@@ -398,11 +459,31 @@ class OpenRouterAPI: ObservableObject {
     func cancelStream(for messageId: UUID) {
         streamingTasks[messageId]?.cancel()
         streamingTasks.removeValue(forKey: messageId)
+        streamBuffers.removeValue(forKey: messageId)
     }
     
     func cancelAllStreams() {
         streamingTasks.values.forEach { $0.cancel() }
         streamingTasks.removeAll()
+        streamBuffers.removeAll()
+    }
+    
+    // MARK: - Error Parsing
+    
+    private func extractErrorMessage(from data: Data) throws -> String {
+        struct ErrorResponse: Codable {
+            let error: ErrorDetail?
+            let message: String?
+            
+            struct ErrorDetail: Codable {
+                let message: String?
+                let type: String?
+                let code: String?
+            }
+        }
+        
+        let errorResponse = try JSONDecoder().decode(ErrorResponse.self, from: data)
+        return errorResponse.error?.message ?? errorResponse.message ?? "Unknown error"
     }
 }
 
@@ -411,10 +492,15 @@ class OpenRouterAPI: ObservableObject {
 enum OpenRouterError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
-    case httpError(Int)
+    case httpError(Int, String?)
     case networkError(Error)
     case decodingError(Error)
     case missingAPIKey
+    case rateLimited(retryAfter: Int?)
+    case insufficientCredits
+    case modelNotFound
+    case contextLengthExceeded
+    case streamingInterrupted
     
     var errorDescription: String? {
         switch self {
@@ -422,14 +508,81 @@ enum OpenRouterError: Error, LocalizedError {
             return "Invalid URL"
         case .invalidResponse:
             return "Invalid response from server"
-        case .httpError(let code):
-            return "HTTP error: \(code)"
+        case .httpError(let code, let message):
+            switch code {
+            case 400:
+                return "Bad request: \(message ?? "Invalid request parameters")"
+            case 401:
+                return "Authentication failed: Please check your API key"
+            case 403:
+                return "Access forbidden: \(message ?? "Insufficient permissions")"
+            case 404:
+                return "Model not found: \(message ?? "The requested model is not available")"
+            case 429:
+                return "Rate limit exceeded: \(message ?? "Please try again later")"
+            case 500:
+                return "Server error: \(message ?? "OpenRouter is experiencing issues")"
+            case 502, 503, 504:
+                return "Service unavailable: \(message ?? "OpenRouter is temporarily unavailable")"
+            default:
+                return "HTTP error \(code): \(message ?? "Unknown error")"
+            }
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
+            if (error as NSError).code == NSURLErrorNotConnectedToInternet {
+                return "No internet connection. Please check your network and try again."
+            } else if (error as NSError).code == NSURLErrorTimedOut {
+                return "Request timed out. Please try again."
+            } else {
+                return "Network error: \(error.localizedDescription)"
+            }
         case .decodingError(let error):
-            return "Decoding error: \(error.localizedDescription)"
+            return "Response parsing error: \(error.localizedDescription)"
         case .missingAPIKey:
-            return "API key is required"
+            return "API key is required. Please add your OpenRouter API key in settings."
+        case .rateLimited(let retryAfter):
+            if let retryAfter = retryAfter {
+                return "Rate limited. Please wait \(retryAfter) seconds before trying again."
+            } else {
+                return "Rate limited. Please try again in a few moments."
+            }
+        case .insufficientCredits:
+            return "Insufficient credits. Please add credits to your OpenRouter account."
+        case .modelNotFound:
+            return "The selected model is not available. Please choose a different model."
+        case .contextLengthExceeded:
+            return "Message too long for this model. Please shorten your message or choose a model with a larger context window."
+        case .streamingInterrupted:
+            return "Connection was interrupted during streaming."
+        }
+    }
+    
+    var recoverySuggestion: String? {
+        switch self {
+        case .httpError(let code, _):
+            switch code {
+            case 401:
+                return "Check your API key in Settings and make sure it's valid."
+            case 429:
+                return "Wait a moment and try again, or upgrade your OpenRouter plan."
+            case 500, 502, 503, 504:
+                return "This is a temporary server issue. Please try again in a few minutes."
+            default:
+                return nil
+            }
+        case .networkError:
+            return "Check your internet connection and try again."
+        case .rateLimited:
+            return "Wait for the rate limit to reset, or upgrade your plan for higher limits."
+        case .insufficientCredits:
+            return "Add credits to your OpenRouter account to continue using the service."
+        case .modelNotFound:
+            return "Choose a different model from the model picker."
+        case .contextLengthExceeded:
+            return "Try shortening your message or selecting a model with a larger context window."
+        case .streamingInterrupted:
+            return "Check your internet connection and try sending the message again."
+        default:
+            return nil
         }
     }
 }
