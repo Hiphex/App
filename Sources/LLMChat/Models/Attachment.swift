@@ -20,6 +20,13 @@ final class Attachment {
     var originalFilename: String?
     var mimeType: String?
     
+    // Media-specific metadata
+    var duration: TimeInterval? // For audio/video files
+    var transcription: String? // For audio files with speech-to-text
+    var width: Int? // For images
+    var height: Int? // For images
+    var pageCount: Int? // For PDFs
+    
     // Relationships
     var message: Message?
     
@@ -29,7 +36,12 @@ final class Attachment {
         sha256: String,
         sizeBytes: Int64,
         originalFilename: String? = nil,
-        mimeType: String? = nil
+        mimeType: String? = nil,
+        duration: TimeInterval? = nil,
+        transcription: String? = nil,
+        width: Int? = nil,
+        height: Int? = nil,
+        pageCount: Int? = nil
     ) {
         self.id = UUID()
         self.createdAt = Date()
@@ -39,6 +51,11 @@ final class Attachment {
         self.sizeBytes = sizeBytes
         self.originalFilename = originalFilename
         self.mimeType = mimeType
+        self.duration = duration
+        self.transcription = transcription
+        self.width = width
+        self.height = height
+        self.pageCount = pageCount
     }
     
     var fileURL: URL? {
@@ -52,5 +69,13 @@ final class Attachment {
     
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
+    }
+    
+    var formattedDuration: String? {
+        guard let duration = duration else { return nil }
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.minute, .second]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: duration)
     }
 }
