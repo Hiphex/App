@@ -3,6 +3,8 @@ import SwiftUI
 
 @MainActor
 class AppState: ObservableObject {
+    static let shared = AppState()
+    
     @Published var hasValidAPIKey = false
     @Published var currentAPIKey: String?
     @Published var isLoading = false
@@ -11,7 +13,7 @@ class AppState: ObservableObject {
     private let keychainService = KeychainService.shared
     private let openRouterAPI = OpenRouterAPI.shared
     
-    init() {
+    private init() {
         checkAPIKey()
     }
     
