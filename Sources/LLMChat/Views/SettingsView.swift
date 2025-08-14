@@ -14,6 +14,14 @@ struct SettingsView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingAdvancedSettings = false
     @State private var selectedSettingsTab: SettingsTab = .general
+    @State private var showingSerperKeyAlert = false
+    @State private var showingWeatherKeyAlert = false
+    @State private var showingNewsKeyAlert = false
+    @State private var showingStockKeyAlert = false
+    @State private var newSerperKey = ""
+    @State private var newWeatherKey = ""
+    @State private var newNewsKey = ""
+    @State private var newStockKey = ""
     
     var body: some View {
         NavigationView {
@@ -109,6 +117,156 @@ struct SettingsView: View {
                         showingDeleteConfirmation = true
                     }
                 }
+            }
+            
+            // Tool API Keys Section
+            Section("Tool API Keys") {
+                // Serper API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Serper API Key")
+                            .font(.headline)
+                        
+                        let hasSerperKey = UserDefaults.standard.string(forKey: "SerperAPIKey") != nil
+                        if hasSerperKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for web search functionality")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasSerperKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingSerperKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // OpenWeatherMap API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("OpenWeatherMap API Key")
+                            .font(.headline)
+                        
+                        let hasWeatherKey = UserDefaults.standard.string(forKey: "OpenWeatherMapAPIKey") != nil
+                        if hasWeatherKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for weather information")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasWeatherKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingWeatherKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // API Setup Help
+                Link("Get Serper API Key", destination: URL(string: "https://serper.dev")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Link("Get OpenWeatherMap API Key", destination: URL(string: "https://openweathermap.org/api")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                // NewsAPI Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("NewsAPI Key")
+                            .font(.headline)
+                        
+                        let hasNewsKey = UserDefaults.standard.string(forKey: "NewsAPIKey") != nil
+                        if hasNewsKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for news and current events")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasNewsKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingNewsKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // Alpha Vantage API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Alpha Vantage API Key")
+                            .font(.headline)
+                        
+                        let hasStockKey = UserDefaults.standard.string(forKey: "AlphaVantageAPIKey") != nil
+                        if hasStockKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for stock market data")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasStockKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingStockKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // API Setup Help
+                Link("Get NewsAPI Key", destination: URL(string: "https://newsapi.org/register")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Link("Get Alpha Vantage API Key", destination: URL(string: "https://www.alphavantage.co/support/#api-key")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Text("Note: CoinGecko API is free and doesn't require a key")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .italic()
             }
             
             // Display Settings
@@ -649,6 +807,74 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to remove your API key? You'll need to enter it again to use the app.")
+        }
+        .alert("Serper API Key", isPresented: $showingSerperKeyAlert) {
+            SecureField("Enter API key...", text: $newSerperKey)
+            
+            Button("Cancel", role: .cancel) {
+                newSerperKey = ""
+            }
+            
+            Button("Save") {
+                if !newSerperKey.isEmpty {
+                    UserDefaults.standard.set(newSerperKey, forKey: "SerperAPIKey")
+                    newSerperKey = ""
+                }
+            }
+            .disabled(newSerperKey.isEmpty)
+        } message: {
+            Text("Enter your Serper API key for web search functionality. Get one free at serper.dev")
+        }
+        .alert("OpenWeatherMap API Key", isPresented: $showingWeatherKeyAlert) {
+            SecureField("Enter API key...", text: $newWeatherKey)
+            
+            Button("Cancel", role: .cancel) {
+                newWeatherKey = ""
+            }
+            
+            Button("Save") {
+                if !newWeatherKey.isEmpty {
+                    UserDefaults.standard.set(newWeatherKey, forKey: "OpenWeatherMapAPIKey")
+                    newWeatherKey = ""
+                }
+            }
+            .disabled(newWeatherKey.isEmpty)
+        } message: {
+            Text("Enter your OpenWeatherMap API key for weather information. Get one free at openweathermap.org/api")
+        }
+        .alert("NewsAPI Key", isPresented: $showingNewsKeyAlert) {
+            SecureField("Enter API key...", text: $newNewsKey)
+            
+            Button("Cancel", role: .cancel) {
+                newNewsKey = ""
+            }
+            
+            Button("Save") {
+                if !newNewsKey.isEmpty {
+                    UserDefaults.standard.set(newNewsKey, forKey: "NewsAPIKey")
+                    newNewsKey = ""
+                }
+            }
+            .disabled(newNewsKey.isEmpty)
+        } message: {
+            Text("Enter your NewsAPI key for current news and headlines. Get one free at newsapi.org")
+        }
+        .alert("Alpha Vantage API Key", isPresented: $showingStockKeyAlert) {
+            SecureField("Enter API key...", text: $newStockKey)
+            
+            Button("Cancel", role: .cancel) {
+                newStockKey = ""
+            }
+            
+            Button("Save") {
+                if !newStockKey.isEmpty {
+                    UserDefaults.standard.set(newStockKey, forKey: "AlphaVantageAPIKey")
+                    newStockKey = ""
+                }
+            }
+            .disabled(newStockKey.isEmpty)
+        } message: {
+            Text("Enter your Alpha Vantage API key for stock market data. Get one free at alphavantage.co")
         }
         .alert("Reset Settings", isPresented: $showingAdvancedSettings) {
             Button("Cancel", role: .cancel) {}

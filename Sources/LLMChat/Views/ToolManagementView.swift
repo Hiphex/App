@@ -9,14 +9,27 @@ struct ToolManagementView: View {
         NavigationView {
             List {
                 Section {
-                    Text("Tools allow the AI to perform specific actions like calculations, date/time operations, and text analysis. Enable the tools you want the AI to have access to.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .listRowBackground(Color.clear)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                                .foregroundColor(.blue)
+                                .font(.title2)
+                            Text("AI Tool Arsenal")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+                        
+                        Text("Empower your AI assistant with specialized tools for calculations, web search, news, finance, and more. Enable the tools you want the AI to have access to.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
                 }
                 
-                Section("Available Tools") {
-                    ForEach(toolRegistry.allTools, id: \.name) { tool in
+                // Core Tools Section
+                Section("🔧 Core Tools") {
+                    ForEach(getCoreTools(), id: \.name) { tool in
                         ToolRowView(
                             tool: tool,
                             isEnabled: toolRegistry.isToolEnabled(tool.name),
@@ -33,6 +46,73 @@ struct ToolManagementView: View {
                         )
                     }
                 }
+                
+                // Internet & Data Tools Section
+                Section("🌐 Internet & Data") {
+                    ForEach(getInternetTools(), id: \.name) { tool in
+                        ToolRowView(
+                            tool: tool,
+                            isEnabled: toolRegistry.isToolEnabled(tool.name),
+                            onToggle: { isEnabled in
+                                if isEnabled {
+                                    toolRegistry.enableTool(tool.name)
+                                } else {
+                                    toolRegistry.disableTool(tool.name)
+                                }
+                            },
+                            onShowDetails: {
+                                showingToolDetails = tool
+                            }
+                        )
+                    }
+                }
+                
+                // Finance Tools Section
+                Section("💰 Finance & Markets") {
+                    ForEach(getFinanceTools(), id: \.name) { tool in
+                        ToolRowView(
+                            tool: tool,
+                            isEnabled: toolRegistry.isToolEnabled(tool.name),
+                            onToggle: { isEnabled in
+                                if isEnabled {
+                                    toolRegistry.enableTool(tool.name)
+                                } else {
+                                    toolRegistry.disableTool(tool.name)
+                                }
+                            },
+                            onShowDetails: {
+                                showingToolDetails = tool
+                            }
+                        )
+                    }
+                }
+                
+                // Quick Stats Section
+                Section("📊 Tool Statistics") {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Total Tools")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(toolRegistry.allTools.count)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing) {
+                            Text("Enabled")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(toolRegistry.availableTools.count)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
             }
             .navigationTitle("Tool Management")
             .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +127,26 @@ struct ToolManagementView: View {
             set: { _ in showingToolDetails = nil }
         )) { item in
             ToolDetailView(tool: item.tool)
+        }
+    }
+    
+    // MARK: - Tool Categorization
+    
+    private func getCoreTools() -> [Tool] {
+        return toolRegistry.allTools.filter { tool in
+            ["calculator", "datetime", "text_analysis", "unit_converter"].contains(tool.name)
+        }
+    }
+    
+    private func getInternetTools() -> [Tool] {
+        return toolRegistry.allTools.filter { tool in
+            ["web_search", "weather", "news"].contains(tool.name)
+        }
+    }
+    
+    private func getFinanceTools() -> [Tool] {
+        return toolRegistry.allTools.filter { tool in
+            ["stocks", "crypto"].contains(tool.name)
         }
     }
 }
@@ -71,6 +171,12 @@ struct ToolRowView: View {
             return "text.magnifyingglass"
         case "unit_converter":
             return "arrow.triangle.2.circlepath.circle"
+        case "news":
+            return "newspaper.circle"
+        case "stocks":
+            return "chart.line.uptrend.xyaxis.circle"
+        case "crypto":
+            return "bitcoinsign.circle"
         default:
             return "gear.circle"
         }
@@ -90,45 +196,78 @@ struct ToolRowView: View {
             return .purple
         case "unit_converter":
             return .red
+        case "news":
+            return .indigo
+        case "stocks":
+            return .mint
+        case "crypto":
+            return .yellow
         default:
             return .gray
         }
     }
     
     var body: some View {
-        HStack {
-            Image(systemName: toolIcon)
-                .font(.title2)
-                .foregroundColor(toolColor)
-                .frame(width: 32)
+        HStack(spacing: 16) {
+            // Tool Icon with Background
+            ZStack {
+                Circle()
+                    .fill(toolColor.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: toolIcon)
+                    .font(.title2)
+                    .foregroundColor(toolColor)
+            }
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(tool.name.replacingOccurrences(of: "_", with: " ").capitalized)
-                    .font(.headline)
+            // Tool Info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(tool.name.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    if isEnabled {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                    }
+                }
                 
                 Text(tool.description)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
             
             Spacer()
             
-            VStack(spacing: 8) {
+            // Controls
+            VStack(spacing: 12) {
                 Toggle("", isOn: Binding(
                     get: { isEnabled },
                     set: onToggle
                 ))
                 .labelsHidden()
+                .scaleEffect(0.9)
                 
                 Button(action: onShowDetails) {
-                    Image(systemName: "info.circle")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Image(systemName: "info.circle.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isEnabled ? toolColor.opacity(0.05) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isEnabled ? toolColor.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
     }
 }
 
@@ -245,6 +384,24 @@ struct ToolDetailView: View {
                 "Search for latest iPhone news",
                 "Find information about climate change",
                 "Look up Swift programming tutorials"
+            ]
+        case "news":
+            return [
+                "Get the latest technology news",
+                "Show me today's business headlines",
+                "What's happening in sports today?"
+            ]
+        case "stocks":
+            return [
+                "Get Apple stock price",
+                "Show me Tesla's company overview",
+                "Search for companies in the tech sector"
+            ]
+        case "crypto":
+            return [
+                "What's the current Bitcoin price?",
+                "Show me trending cryptocurrencies",
+                "Get market data for Ethereum"
             ]
         default:
             return ["Ask the AI to use this tool in your conversation"]
