@@ -12,7 +12,9 @@ class KeychainService {
     // MARK: - API Key Management
     
     func saveAPIKey(_ key: String) throws {
-        let data = key.data(using: .utf8)!
+        guard let data = key.data(using: .utf8) else {
+            throw KeychainError.invalidData
+        }
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

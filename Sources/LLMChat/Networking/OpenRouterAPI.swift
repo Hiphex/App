@@ -457,15 +457,19 @@ class OpenRouterAPI: ObservableObject {
     // MARK: - Task Management
     
     func cancelStream(for messageId: UUID) {
-        streamingTasks[messageId]?.cancel()
-        streamingTasks.removeValue(forKey: messageId)
-        streamBuffers.removeValue(forKey: messageId)
+        Task { @MainActor in
+            streamingTasks[messageId]?.cancel()
+            streamingTasks.removeValue(forKey: messageId)
+            streamBuffers.removeValue(forKey: messageId)
+        }
     }
     
     func cancelAllStreams() {
-        streamingTasks.values.forEach { $0.cancel() }
-        streamingTasks.removeAll()
-        streamBuffers.removeAll()
+        Task { @MainActor in
+            streamingTasks.values.forEach { $0.cancel() }
+            streamingTasks.removeAll()
+            streamBuffers.removeAll()
+        }
     }
     
     // MARK: - Error Parsing
