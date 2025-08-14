@@ -27,7 +27,11 @@ class BackgroundTaskService: ObservableObject {
             using: nil
         ) { task in
             Task {
-                await self.handleBackgroundSync(task as! BGAppRefreshTask)
+                guard let refreshTask = task as? BGAppRefreshTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                await self.handleBackgroundSync(refreshTask)
             }
         }
         
@@ -37,7 +41,11 @@ class BackgroundTaskService: ObservableObject {
             using: nil
         ) { task in
             Task {
-                await self.handleBackgroundCleanup(task as! BGProcessingTask)
+                guard let processingTask = task as? BGProcessingTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                await self.handleBackgroundCleanup(processingTask)
             }
         }
     }

@@ -8,7 +8,10 @@ class ImageStorageService {
     private let imagesDirectory: URL
     
     private init() {
-        documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            fatalError("Unable to access documents directory")
+        }
+        documentsDirectory = documentsDir
         imagesDirectory = documentsDirectory.appendingPathComponent("Images")
         
         // Create images directory if it doesn't exist
@@ -78,7 +81,10 @@ class ImageStorageService {
     // MARK: - Cleanup Methods
     
     func cleanupOldAttachments() async {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("Unable to access documents directory for cleanup")
+            return
+        }
         let attachmentsPath = documentsPath.appendingPathComponent("attachments")
         
         do {
