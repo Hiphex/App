@@ -201,15 +201,32 @@ class ShareViewController: SLComposeServiceViewController {
             }
             
             if let url = item as? URL {
-                do {
-                    let data = try Data(contentsOf: url)
-                    let filename = url.lastPathComponent
-                    
-                    DispatchQueue.main.async {
-                        self?.shareContext.files.append(SharedFile(data: data, filename: filename, mimeType: self?.getMimeType(for: url)))
+                // Load file data asynchronously to prevent memory issues
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        // Check file size before loading to prevent memory issues
+                        let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
+                        let fileSize = resourceValues.fileSize ?? 0
+                        
+                        // Limit file size to 50MB to prevent memory issues
+                        guard fileSize < 50_000_000 else {
+                            print("File too large: \(fileSize) bytes")
+                            return
+                        }
+                        
+                        let data = try Data(contentsOf: url)
+                        let filename = url.lastPathComponent
+                        
+                        DispatchQueue.main.async {
+                            self?.shareContext.files.append(SharedFile(
+                                data: data, 
+                                filename: filename, 
+                                mimeType: self?.getMimeType(for: url)
+                            ))
+                        }
+                    } catch {
+                        print("Error reading file data: \(error)")
                     }
-                } catch {
-                    print("Error reading file data: \(error)")
                 }
             }
         }

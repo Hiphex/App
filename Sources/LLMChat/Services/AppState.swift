@@ -115,14 +115,28 @@ class AppState: ObservableObject {
     
     var accentColor: Color {
         get {
-            if let color = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: accentColorData) {
-                return Color(uiColor: color)
+            // Safely unarchive color data with proper error handling
+            guard !accentColorData.isEmpty else { return .blue }
+            
+            do {
+                if let color = try NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: accentColorData) {
+                    return Color(uiColor: color)
+                }
+            } catch {
+                print("Failed to unarchive accent color: \(error)")
+                // Reset corrupted data
+                accentColorData = Data()
             }
+            
             return .blue
         }
         set {
-            if let data = try? NSKeyedArchiver.archivedData(withRootObject: UIColor(newValue), requiringSecureCoding: false) {
+            do {
+                let data = try NSKeyedArchiver.archivedData(withRootObject: UIColor(newValue), requiringSecureCoding: false)
                 accentColorData = data
+            } catch {
+                print("Failed to archive accent color: \(error)")
+                // Keep existing data if archiving fails
             }
         }
     }

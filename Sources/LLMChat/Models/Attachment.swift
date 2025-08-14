@@ -59,12 +59,23 @@ final class Attachment {
     }
     
     var fileURL: URL? {
-        URL(string: localURL)
+        // Handle both file paths and URLs
+        if localURL.hasPrefix("file://") {
+            return URL(string: localURL)
+        } else {
+            return URL(fileURLWithPath: localURL)
+        }
     }
     
     var thumbnailFileURL: URL? {
         guard let thumbnailURL else { return nil }
-        return URL(string: thumbnailURL)
+        
+        // Handle both file paths and URLs
+        if thumbnailURL.hasPrefix("file://") {
+            return URL(string: thumbnailURL)
+        } else {
+            return URL(fileURLWithPath: thumbnailURL)
+        }
     }
     
     var formattedSize: String {
