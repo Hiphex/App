@@ -2,17 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @StateObject private var appState = AppState()
-    @State private var showingOnboarding = false
+    @EnvironmentObject private var appState: AppState
     
     var body: some View {
         Group {
             if appState.hasValidAPIKey {
                 ChatsListView()
-                    .environmentObject(appState)
             } else {
                 OnboardingView()
-                    .environmentObject(appState)
             }
         }
         .onAppear {
@@ -23,6 +20,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AppState.shared)
         .modelContainer(for: [
             Conversation.self,
             Message.self,

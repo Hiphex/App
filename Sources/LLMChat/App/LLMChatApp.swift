@@ -5,7 +5,7 @@ import UserNotifications
 
 @main
 struct LLMChatApp: App {
-    @StateObject private var appState = AppState()
+    @StateObject private var appState = AppState.shared
     @StateObject private var backgroundTaskService = BackgroundTaskService.shared
     @StateObject private var notificationService = NotificationService.shared
     @StateObject private var hapticService = HapticService.shared
