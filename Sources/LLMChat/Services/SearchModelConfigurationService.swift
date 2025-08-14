@@ -114,7 +114,7 @@ class SearchModelConfigurationService: ObservableObject {
     ) -> SearchModelConfiguration {
         
         guard enableSmartModelSelection else {
-            return currentSearchModel ?? availableSearchModels.first!
+            return currentSearchModel ?? availableSearchModels.first ?? defaultSearchModels.first!
         }
         
         let candidates = availableSearchModels.filter { model in
@@ -136,7 +136,7 @@ class SearchModelConfigurationService: ObservableObject {
             (model, calculateModelScore(model, for: query, contentType: contentType, prioritizeSpeed: prioritizeSpeed))
         }.sorted { $0.1 > $1.1 }
         
-        return scoredCandidates.first?.0 ?? currentSearchModel ?? availableSearchModels.first!
+        return scoredCandidates.first?.0 ?? currentSearchModel ?? availableSearchModels.first ?? defaultSearchModels.first!
     }
     
     private func calculateModelScore(

@@ -12,7 +12,10 @@ class AttachmentService {
     private let thumbnailsDirectory: URL
     
     private init() {
-        documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            fatalError("Unable to access documents directory")
+        }
+        documentsDirectory = documentsDir
         attachmentsDirectory = documentsDirectory.appendingPathComponent("Attachments")
         thumbnailsDirectory = documentsDirectory.appendingPathComponent("Thumbnails")
         

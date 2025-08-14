@@ -395,7 +395,9 @@ struct WebSearchTool: Tool {
             ))
         }
         
-        let url = URL(string: "https://google.serper.dev/search")!
+        guard let url = URL(string: "https://google.serper.dev/search") else {
+            throw ToolError.invalidConfiguration("Invalid Serper API URL")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

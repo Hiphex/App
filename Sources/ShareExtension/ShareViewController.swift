@@ -151,7 +151,18 @@ class ShareViewController: SLComposeServiceViewController {
             if let image = item as? UIImage {
                 imageData = image.jpegData(compressionQuality: 0.8)
             } else if let url = item as? URL {
-                imageData = try? Data(contentsOf: url)
+                // Load image data asynchronously to prevent UI blocking
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        let data = try Data(contentsOf: url)
+                        DispatchQueue.main.async {
+                            self?.shareContext.images.append(SharedImage(data: data, filename: url.lastPathComponent))
+                        }
+                    } catch {
+                        print("Error loading image from URL: \(error)")
+                    }
+                }
+                imageData = nil // Skip the synchronous processing
             } else if let data = item as? Data {
                 imageData = data
             }
