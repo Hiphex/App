@@ -16,8 +16,12 @@ struct SettingsView: View {
     @State private var selectedSettingsTab: SettingsTab = .general
     @State private var showingSerperKeyAlert = false
     @State private var showingWeatherKeyAlert = false
+    @State private var showingNewsKeyAlert = false
+    @State private var showingStockKeyAlert = false
     @State private var newSerperKey = ""
     @State private var newWeatherKey = ""
+    @State private var newNewsKey = ""
+    @State private var newStockKey = ""
     
     var body: some View {
         NavigationView {
@@ -187,6 +191,82 @@ struct SettingsView: View {
                 Link("Get OpenWeatherMap API Key", destination: URL(string: "https://openweathermap.org/api")!)
                     .font(.caption)
                     .foregroundColor(.blue)
+                
+                // NewsAPI Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("NewsAPI Key")
+                            .font(.headline)
+                        
+                        let hasNewsKey = UserDefaults.standard.string(forKey: "NewsAPIKey") != nil
+                        if hasNewsKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for news and current events")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasNewsKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingNewsKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // Alpha Vantage API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Alpha Vantage API Key")
+                            .font(.headline)
+                        
+                        let hasStockKey = UserDefaults.standard.string(forKey: "AlphaVantageAPIKey") != nil
+                        if hasStockKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for stock market data")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasStockKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingStockKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // API Setup Help
+                Link("Get NewsAPI Key", destination: URL(string: "https://newsapi.org/register")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Link("Get Alpha Vantage API Key", destination: URL(string: "https://www.alphavantage.co/support/#api-key")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Text("Note: CoinGecko API is free and doesn't require a key")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .italic()
             }
             
             // Display Settings
@@ -761,6 +841,40 @@ struct SettingsView: View {
             .disabled(newWeatherKey.isEmpty)
         } message: {
             Text("Enter your OpenWeatherMap API key for weather information. Get one free at openweathermap.org/api")
+        }
+        .alert("NewsAPI Key", isPresented: $showingNewsKeyAlert) {
+            SecureField("Enter API key...", text: $newNewsKey)
+            
+            Button("Cancel", role: .cancel) {
+                newNewsKey = ""
+            }
+            
+            Button("Save") {
+                if !newNewsKey.isEmpty {
+                    UserDefaults.standard.set(newNewsKey, forKey: "NewsAPIKey")
+                    newNewsKey = ""
+                }
+            }
+            .disabled(newNewsKey.isEmpty)
+        } message: {
+            Text("Enter your NewsAPI key for current news and headlines. Get one free at newsapi.org")
+        }
+        .alert("Alpha Vantage API Key", isPresented: $showingStockKeyAlert) {
+            SecureField("Enter API key...", text: $newStockKey)
+            
+            Button("Cancel", role: .cancel) {
+                newStockKey = ""
+            }
+            
+            Button("Save") {
+                if !newStockKey.isEmpty {
+                    UserDefaults.standard.set(newStockKey, forKey: "AlphaVantageAPIKey")
+                    newStockKey = ""
+                }
+            }
+            .disabled(newStockKey.isEmpty)
+        } message: {
+            Text("Enter your Alpha Vantage API key for stock market data. Get one free at alphavantage.co")
         }
         .alert("Reset Settings", isPresented: $showingAdvancedSettings) {
             Button("Cancel", role: .cancel) {}
