@@ -73,6 +73,39 @@ class AppState: ObservableObject {
     @AppStorage("showTokenCount") var showTokenCount = true
     @AppStorage("showCostEstimates") var showCostEstimates = true
     
+    // Search Settings
+    @AppStorage("searchModel") var searchModel = "anthropic/claude-3-haiku"
+    @AppStorage("searchTemperature") var searchTemperature = 0.3
+    @AppStorage("enableSemanticSearch") var enableSemanticSearch = true
+    @AppStorage("maxSearchResults") var maxSearchResults = 50
+    @AppStorage("searchResultsGrouping") var searchResultsGrouping = "conversation"
+    
+    // Advanced Settings
+    @AppStorage("enableAutoSync") var enableAutoSync = true
+    @AppStorage("enableBackgroundSync") var enableBackgroundSync = true
+    @AppStorage("syncFrequency") var syncFrequency = 15 // minutes
+    @AppStorage("enableAdvancedLogging") var enableAdvancedLogging = false
+    @AppStorage("maxCacheSize") var maxCacheSize = 100 // MB
+    
+    // Haptic Settings
+    @AppStorage("hapticsEnabled") var hapticsEnabled = true
+    @AppStorage("hapticIntensity") var hapticIntensityRaw = "medium"
+    
+    var hapticIntensity: HapticIntensity {
+        get {
+            HapticIntensity(rawValue: hapticIntensityRaw) ?? .medium
+        }
+        set {
+            hapticIntensityRaw = newValue.rawValue
+        }
+    }
+    
+    // Notification Settings
+    @AppStorage("notificationsEnabled") var notificationsEnabled = true
+    @AppStorage("messageNotifications") var messageNotifications = true
+    @AppStorage("systemNotifications") var systemNotifications = true
+    @AppStorage("notificationSounds") var notificationSounds = true
+    
     // MARK: - Theme
     
     @AppStorage("isDarkMode") var isDarkMode = false
