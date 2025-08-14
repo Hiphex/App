@@ -21,7 +21,15 @@ let package = Package(
             dependencies: [
                 .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "Algorithms", package: "swift-algorithms"),
+            ],
+            resources: [
+                .process("Resources")
             ]
+        ),
+        .target(
+            name: "LLMChatShareExtension",
+            dependencies: ["LLMChat"],
+            path: "Sources/ShareExtension"
         ),
         .testTarget(
             name: "LLMChatTests",

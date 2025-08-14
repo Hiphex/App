@@ -74,4 +74,27 @@ class ImageStorageService {
     func deleteImage(at path: String) {
         try? FileManager.default.removeItem(atPath: path)
     }
+    
+    // MARK: - Cleanup Methods
+    
+    func cleanupOldAttachments() async {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let attachmentsPath = documentsPath.appendingPathComponent("attachments")
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: attachmentsPath, includingPropertiesForKeys: [.creationDateKey], options: .skipsHiddenFiles)
+            
+            let thirtyDaysAgo = Date().addingTimeInterval(-30 * 24 * 60 * 60)
+            
+            for fileURL in files {
+                if let creationDate = try? fileURL.resourceValues(forKeys: [.creationDateKey]).creationDate,
+                   creationDate < thirtyDaysAgo {
+                    try? FileManager.default.removeItem(at: fileURL)
+                    print("Cleaned up old attachment: \(fileURL.lastPathComponent)")
+                }
+            }
+        } catch {
+            print("Failed to cleanup old attachments: \(error)")
+        }
+    }
 }
