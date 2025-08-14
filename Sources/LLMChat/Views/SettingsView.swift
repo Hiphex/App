@@ -14,6 +14,10 @@ struct SettingsView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingAdvancedSettings = false
     @State private var selectedSettingsTab: SettingsTab = .general
+    @State private var showingSerperKeyAlert = false
+    @State private var showingWeatherKeyAlert = false
+    @State private var newSerperKey = ""
+    @State private var newWeatherKey = ""
     
     var body: some View {
         NavigationView {
@@ -109,6 +113,80 @@ struct SettingsView: View {
                         showingDeleteConfirmation = true
                     }
                 }
+            }
+            
+            // Tool API Keys Section
+            Section("Tool API Keys") {
+                // Serper API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Serper API Key")
+                            .font(.headline)
+                        
+                        let hasSerperKey = UserDefaults.standard.string(forKey: "SerperAPIKey") != nil
+                        if hasSerperKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for web search functionality")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasSerperKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingSerperKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // OpenWeatherMap API Key
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("OpenWeatherMap API Key")
+                            .font(.headline)
+                        
+                        let hasWeatherKey = UserDefaults.standard.string(forKey: "OpenWeatherMapAPIKey") != nil
+                        if hasWeatherKey {
+                            Text("••••••••••••••••")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No API key configured")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text("Required for weather information")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(hasWeatherKey ? "Change" : "Add") {
+                        hapticService.triggerButtonTapFeedback()
+                        showingWeatherKeyAlert = true
+                    }
+                    .foregroundColor(.blue)
+                }
+                
+                // API Setup Help
+                Link("Get Serper API Key", destination: URL(string: "https://serper.dev")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+                Link("Get OpenWeatherMap API Key", destination: URL(string: "https://openweathermap.org/api")!)
+                    .font(.caption)
+                    .foregroundColor(.blue)
             }
             
             // Display Settings
@@ -649,6 +727,40 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to remove your API key? You'll need to enter it again to use the app.")
+        }
+        .alert("Serper API Key", isPresented: $showingSerperKeyAlert) {
+            SecureField("Enter API key...", text: $newSerperKey)
+            
+            Button("Cancel", role: .cancel) {
+                newSerperKey = ""
+            }
+            
+            Button("Save") {
+                if !newSerperKey.isEmpty {
+                    UserDefaults.standard.set(newSerperKey, forKey: "SerperAPIKey")
+                    newSerperKey = ""
+                }
+            }
+            .disabled(newSerperKey.isEmpty)
+        } message: {
+            Text("Enter your Serper API key for web search functionality. Get one free at serper.dev")
+        }
+        .alert("OpenWeatherMap API Key", isPresented: $showingWeatherKeyAlert) {
+            SecureField("Enter API key...", text: $newWeatherKey)
+            
+            Button("Cancel", role: .cancel) {
+                newWeatherKey = ""
+            }
+            
+            Button("Save") {
+                if !newWeatherKey.isEmpty {
+                    UserDefaults.standard.set(newWeatherKey, forKey: "OpenWeatherMapAPIKey")
+                    newWeatherKey = ""
+                }
+            }
+            .disabled(newWeatherKey.isEmpty)
+        } message: {
+            Text("Enter your OpenWeatherMap API key for weather information. Get one free at openweathermap.org/api")
         }
         .alert("Reset Settings", isPresented: $showingAdvancedSettings) {
             Button("Cancel", role: .cancel) {}

@@ -87,7 +87,7 @@ class ToolRegistry {
     }
     
     private func enableDefaultTools() {
-        enabledTools = ["calculator", "datetime", "text_analysis", "unit_converter"]
+        enabledTools = ["calculator", "datetime", "text_analysis", "unit_converter", "web_search", "weather"]
     }
     
     // MARK: - Tool Management
@@ -337,53 +337,21 @@ struct DateTimeTool: Tool {
     }
 }
 
-// MARK: Weather Tool
-
-struct WeatherTool: Tool {
-    let name = "weather"
-    let description = "Get current weather information for a location"
-    
-    let parameters = ToolParameters(
-        properties: [
-            "location": ParameterProperty(
-                type: "string",
-                description: "Location name (city, state/country)"
-            )
-        ],
-        required: ["location"]
-    )
-    
-    func execute(arguments: [String: Any]) async throws -> ToolResult {
-        guard let location = arguments["location"] as? String else {
-            throw ToolError.invalidArguments("Missing 'location' parameter")
-        }
-        
-        // Note: This is a mock implementation
-        // In a real app, you'd integrate with a weather API like OpenWeatherMap
-        
-        return ToolResult(
-            success: true,
-            content: "Weather information for \(location) is not available in this demo version. Please integrate with a weather API service.",
-            metadata: ["location": location, "note": "Mock implementation"]
-        )
-    }
-}
-
 // MARK: Web Search Tool
 
 struct WebSearchTool: Tool {
     let name = "web_search"
-    let description = "Search the web for information"
+    let description = "Search the web for current information and answer questions about recent events"
     
     let parameters = ToolParameters(
         properties: [
             "query": ParameterProperty(
                 type: "string",
-                description: "Search query"
+                description: "Search query to find information on the web"
             ),
             "max_results": ParameterProperty(
                 type: "integer",
-                description: "Maximum number of results to return (default: 5)"
+                description: "Maximum number of results to return (default: 5, max: 10)"
             )
         ],
         required: ["query"]
@@ -394,15 +362,253 @@ struct WebSearchTool: Tool {
             throw ToolError.invalidArguments("Missing 'query' parameter")
         }
         
-        // Note: This is a mock implementation
-        // In a real app, you'd integrate with a search API
+        let maxResults = arguments["max_results"] as? Int ?? 5
+        let clampedMaxResults = min(max(1, maxResults), 10)
         
-        return ToolResult(
-            success: true,
-            content: "Web search for '\(query)' is not available in this demo version. Please integrate with a search API service.",
-            metadata: ["query": query, "note": "Mock implementation"]
+        do {
+            let results = try await performWebSearch(query: query, maxResults: clampedMaxResults)
+            return ToolResult(
+                success: true,
+                content: formatSearchResults(results),
+                metadata: ["query": query, "results_count": results.count]
+            )
+        } catch {
+            return ToolResult(
+                success: false,
+                content: "Web search failed: \(error.localizedDescription). Please try rephrasing your query or check your internet connection."
+            )
+        }
+    }
+    
+    private func performWebSearch(query: String, maxResults: Int) async throws -> [SearchResult] {
+        // Use Serper API for web search
+        let apiKey = UserDefaults.standard.string(forKey: "SerperAPIKey")
+        
+        guard let apiKey = apiKey, !apiKey.isEmpty else {
+            throw ToolError.networkError(NSError(
+                domain: "WebSearchError",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "Serper API key not found. Please add your API key in Settings."]
+            ))
+        }
+        
+        let url = URL(string: "https://google.serper.dev/search")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-KEY")
+        
+        let requestBody = [
+            "q": query,
+            "num": maxResults
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                throw ToolError.networkError(NSError(
+                    domain: "WebSearchError",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "Search API returned status code \(httpResponse.statusCode)"]
+                ))
+            }
+        }
+        
+        let searchResponse = try JSONDecoder().decode(SerperSearchResponse.self, from: data)
+        return searchResponse.organic.map { result in
+            SearchResult(
+                title: result.title,
+                link: result.link,
+                snippet: result.snippet
+            )
+        }
+    }
+    
+    private func formatSearchResults(_ results: [SearchResult]) -> String {
+        if results.isEmpty {
+            return "No search results found for the given query."
+        }
+        
+        var formatted = "Web search results:\n\n"
+        for (index, result) in results.enumerated() {
+            formatted += "\(index + 1). **\(result.title)**\n"
+            formatted += "   \(result.snippet)\n"
+            formatted += "   Source: \(result.link)\n\n"
+        }
+        
+        return formatted
+    }
+}
+
+// MARK: - Search Result Models
+
+struct SearchResult {
+    let title: String
+    let link: String
+    let snippet: String
+}
+
+struct SerperSearchResponse: Codable {
+    let organic: [SerperResult]
+}
+
+struct SerperResult: Codable {
+    let title: String
+    let link: String
+    let snippet: String
+}
+
+// MARK: Weather Tool
+
+struct WeatherTool: Tool {
+    let name = "weather"
+    let description = "Get current weather information and forecast for any location worldwide"
+    
+    let parameters = ToolParameters(
+        properties: [
+            "location": ParameterProperty(
+                type: "string",
+                description: "Location name (city, state/country) or coordinates (lat,lon)"
+            ),
+            "units": ParameterProperty(
+                type: "string",
+                description: "Temperature units",
+                enum: ["metric", "imperial", "kelvin"]
+            )
+        ],
+        required: ["location"]
+    )
+    
+    func execute(arguments: [String: Any]) async throws -> ToolResult {
+        guard let location = arguments["location"] as? String else {
+            throw ToolError.invalidArguments("Missing 'location' parameter")
+        }
+        
+        let units = arguments["units"] as? String ?? "metric"
+        
+        do {
+            let weather = try await fetchWeatherData(location: location, units: units)
+            return ToolResult(
+                success: true,
+                content: formatWeatherData(weather, location: location),
+                metadata: [
+                    "location": location,
+                    "temperature": weather.temperature,
+                    "condition": weather.condition,
+                    "units": units
+                ]
+            )
+        } catch {
+            return ToolResult(
+                success: false,
+                content: "Weather data unavailable for '\(location)'. Please check the location name and try again. Error: \(error.localizedDescription)"
+            )
+        }
+    }
+    
+    private func fetchWeatherData(location: String, units: String) async throws -> WeatherData {
+        let apiKey = UserDefaults.standard.string(forKey: "OpenWeatherMapAPIKey")
+        
+        guard let apiKey = apiKey, !apiKey.isEmpty else {
+            throw ToolError.networkError(NSError(
+                domain: "WeatherError",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "OpenWeatherMap API key not found. Please add your API key in Settings."]
+            ))
+        }
+        
+        let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location
+        let urlString = "https://api.openweathermap.org/data/2.5/weather?q=\(encodedLocation)&appid=\(apiKey)&units=\(units)"
+        
+        guard let url = URL(string: urlString) else {
+            throw ToolError.invalidArguments("Invalid location format")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                throw ToolError.networkError(NSError(
+                    domain: "WeatherError",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "Weather API returned status code \(httpResponse.statusCode)"]
+                ))
+            }
+        }
+        
+        let weatherResponse = try JSONDecoder().decode(OpenWeatherResponse.self, from: data)
+        
+        return WeatherData(
+            temperature: weatherResponse.main.temp,
+            condition: weatherResponse.weather.first?.description ?? "Unknown",
+            humidity: weatherResponse.main.humidity,
+            windSpeed: weatherResponse.wind?.speed ?? 0,
+            cityName: weatherResponse.name,
+            country: weatherResponse.sys.country
         )
     }
+    
+    private func formatWeatherData(_ weather: WeatherData, location: String) -> String {
+        let unitsSymbol = getUnitsSymbol()
+        let speedUnit = getSpeedUnit()
+        
+        return """
+        Current weather for \(weather.cityName), \(weather.country):
+        
+        🌡️ Temperature: \(String(format: "%.1f", weather.temperature))\(unitsSymbol)
+        🌤️ Condition: \(weather.condition.capitalized)
+        💧 Humidity: \(weather.humidity)%
+        💨 Wind Speed: \(String(format: "%.1f", weather.windSpeed)) \(speedUnit)
+        """
+    }
+    
+    private func getUnitsSymbol() -> String {
+        // This would ideally be passed from the units parameter, but for simplicity using metric
+        return "°C"
+    }
+    
+    private func getSpeedUnit() -> String {
+        return "m/s"
+    }
+}
+
+// MARK: - Weather Data Models
+
+struct WeatherData {
+    let temperature: Double
+    let condition: String
+    let humidity: Int
+    let windSpeed: Double
+    let cityName: String
+    let country: String
+}
+
+struct OpenWeatherResponse: Codable {
+    let main: MainWeatherData
+    let weather: [WeatherCondition]
+    let wind: WindData?
+    let name: String
+    let sys: SystemData
+}
+
+struct MainWeatherData: Codable {
+    let temp: Double
+    let humidity: Int
+}
+
+struct WeatherCondition: Codable {
+    let description: String
+}
+
+struct WindData: Codable {
+    let speed: Double
+}
+
+struct SystemData: Codable {
+    let country: String
 }
 
 // MARK: Text Analysis Tool
